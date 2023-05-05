@@ -17,6 +17,8 @@ import java.util.stream.Collectors;
 public class QuestionSearchServiceImpl implements QuestionSearchService {
 
     private final QuestionRepository repository;
+    private final ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(5);
+
     private final String REGEX_FOR_WORD = "[\\p{Punct}\\s]+";
 
     @Override
@@ -45,6 +47,8 @@ public class QuestionSearchServiceImpl implements QuestionSearchService {
             return new ArrayList<>();
         }
 
+        executor.shutdown();
+
         List<String> theMostRelated = relatedWordsMap.entrySet().stream()
                 .sorted(Collections.reverseOrder(Map.Entry.comparingByValue()))
                 .map(Map.Entry::getKey).toList();
@@ -72,7 +76,6 @@ public class QuestionSearchServiceImpl implements QuestionSearchService {
 
     private Map<String, Double> getRelatedWords(List<String> question, List<String> candidates) {
         Map<String, Double> relatedWordsMap = new HashMap<>();
-        ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(5);
 
         for (String s : candidates) {
             List<String> splitString = Arrays.stream(s.split(REGEX_FOR_WORD))
@@ -91,4 +94,6 @@ public class QuestionSearchServiceImpl implements QuestionSearchService {
 
         return relatedWordsMap;
     }
+
+
 }
