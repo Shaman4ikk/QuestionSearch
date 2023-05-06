@@ -2,11 +2,13 @@ package com.example.questionsearch.service;
 
 import com.example.questionsearch.entity.Question;
 import com.example.questionsearch.repository.QuestionRepository;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.text.similarity.LevenshteinDistance;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 
 import java.util.*;
 import java.util.concurrent.*;
@@ -19,10 +21,11 @@ public class QuestionSearchServiceImpl implements QuestionSearchService {
     private final QuestionRepository repository;
     private final ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(5);
 
-    private final String REGEX_FOR_WORD = "[\\p{Punct}\\s]+";
+    private static final String REGEX_FOR_WORD = "[\\p{Punct}\\s]+";
 
     @Override
     public List<String> getTopOfQuestionsByMaxLength(Integer count) {
+        repository.deleteAll();
         return repository
                 .findTopOfQuestionsByMaxLength(PageRequest.of(0, count, Sort.unsorted()))
                 .stream().map(Question::getValue).collect(Collectors.toList());
@@ -37,9 +40,14 @@ public class QuestionSearchServiceImpl implements QuestionSearchService {
                 .stream().map(Question::getValue).toList();
 
         splitQuestion = splitQuestion.stream().filter(s1 -> s1.length() > 3).toList();
-        Map<String, Double> relatedWordsMap = getRelatedWords(splitQuestion, candidates);
 
-        if (relatedWordsMap.values().stream().allMatch(val -> val.equals(0.0))) {
+        Map<String, Double> relatedWordsMap = new HashMap<>();
+
+        if (!CollectionUtils.isEmpty(splitQuestion)) {
+            relatedWordsMap = getRelatedWords(splitQuestion, candidates);
+        }
+
+        if (relatedWordsMap.isEmpty() || relatedWordsMap.values().stream().allMatch(val -> val.equals(0.0))) {
             Question newQuestion = new Question();
             newQuestion.setValue(question);
             repository.save(newQuestion);
@@ -47,12 +55,15 @@ public class QuestionSearchServiceImpl implements QuestionSearchService {
             return new ArrayList<>();
         }
 
-        executor.shutdown();
-
         List<String> theMostRelated = relatedWordsMap.entrySet().stream()
                 .sorted(Collections.reverseOrder(Map.Entry.comparingByValue()))
                 .map(Map.Entry::getKey).toList();
         return theMostRelated.subList(0, count > theMostRelated.size() ? theMostRelated.size() : count);
+    }
+
+    @PreDestroy
+    private void preDestroy() {
+        executor.shutdown();
     }
 
     private Double calculateRelatedWords(List<String> question, List<String> splitQuestion) {
@@ -88,7 +99,7 @@ public class QuestionSearchServiceImpl implements QuestionSearchService {
                 Double val = future.get();
                 relatedWordsMap.put(s, val);
             } catch (ExecutionException | InterruptedException e) {
-                throw new RuntimeException(e);
+                Thread.currentThread().interrupt();
             }
         }
 
