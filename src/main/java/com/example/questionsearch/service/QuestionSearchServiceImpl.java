@@ -12,7 +12,6 @@ import org.springframework.util.CollectionUtils;
 
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -25,10 +24,9 @@ public class QuestionSearchServiceImpl implements QuestionSearchService {
 
     @Override
     public List<String> getTopOfQuestionsByMaxLength(Integer count) {
-        repository.deleteAll();
         return repository
                 .findTopOfQuestionsByMaxLength(PageRequest.of(0, count, Sort.unsorted()))
-                .stream().map(Question::getValue).collect(Collectors.toList());
+                .stream().map(Question::getValue).toList();
     }
 
     @Override
